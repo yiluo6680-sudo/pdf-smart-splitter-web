@@ -41,10 +41,19 @@
     <details class="settings-card" open>
       <summary>
         <span>识别与命名</span>
-        <small>只需选择模板页并填写字段名称</small>
+        <small>选择处理方式并填写字段名称</small>
       </summary>
       <div class="settings-body">
         <div class="simple-settings">
+          <label class="field field-wide">
+            <span>处理方式</span>
+            <select id="processMode">
+              <option value="auto">自动：单个 PDF 拆分，多个 PDF 逐个重命名</option>
+              <option value="split">一个大 PDF：按模板封面拆分</option>
+              <option value="rename">N 个独立 PDF：只识别第一页，不拆分</option>
+            </select>
+          </label>
+          <div id="templateSettings" class="template-settings">
           <label class="field">
             <span>分界模板</span>
             <select id="templateMode">
@@ -56,12 +65,13 @@
             <span>模板页码</span>
             <input id="templatePage" type="number" min="1" step="1" value="1">
           </label>
+          </div>
           <label class="field field-fields">
             <span>提取字段名称，同时作为文件名顺序</span>
             <textarea id="fieldNames" rows="3">标题、编号、项目名称、客户名称、日期</textarea>
           </label>
         </div>
-        <p class="settings-help">字段用逗号、顿号或换行分隔。系统自动提取“字段名：字段值”，无需正则表达式。</p>
+        <p class="settings-help">字段用逗号、顿号或换行分隔。系统按标签附近内容提取；编号缺失或受印章干扰时，只补充识别下一页。</p>
       </div>
     </details>
 
@@ -102,4 +112,3 @@
   <script src="./app.js"></script>
 </body>
 </html>
-

@@ -37,7 +37,8 @@ button, input, select, textarea { font: inherit; }
 .settings-body { padding: 4px 20px 20px; border-top: 1px solid var(--line); }
 .simple-settings { padding-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .field { display: grid; gap: 6px; }
-.field-fields { grid-column: 1 / -1; }
+.field-wide, .field-fields { grid-column: 1 / -1; }
+.template-settings { display: contents; }
 .field span { color: #4e5c55; font-size: 13px; font-weight: 650; }
 .field input, .field select, .field textarea { width: 100%; min-height: 40px; padding: 9px 11px; color: var(--ink); background: #fff; border: 1px solid #cfd9d2; border-radius: 7px; }
 .field textarea { resize: vertical; }
@@ -74,9 +75,8 @@ td:nth-child(2), td:nth-child(3), td:nth-child(6), td:nth-child(7) { min-width: 
   .privacy-note { margin-inline: 0; }
   .upload-zone { min-height: 175px; }
   .simple-settings { grid-template-columns: 1fr; }
-  .field-fields { grid-column: auto; }
+  .field-wide, .field-fields { grid-column: auto; }
   .settings-card > summary { align-items: flex-start; flex-direction: column; }
   .upload-actions, .primary-actions { width: 100%; }
   .upload-actions button, .primary-actions .button { flex: 1; }
 }
-
