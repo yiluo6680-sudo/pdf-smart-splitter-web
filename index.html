@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="浏览器端 PDF 智能拆分、OCR、字段提取与重命名工具">
+  <title>PDF 智能拆分与重命名</title>
+  <link rel="stylesheet" href="./app.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="hero">
+      <p class="eyebrow">浏览器端 PDF 工作台</p>
+      <h1>PDF 智能拆分与重命名</h1>
+      <p>选择模板页，自动寻找分界页、提取字段并生成 Excel 目录</p>
+    </header>
+
+    <section class="privacy-note">
+      文件只在当前浏览器处理，不上传服务器。扫描件首次识别会下载中文 OCR 模型。
+    </section>
+
+    <section id="dropZone" class="upload-zone" tabindex="0" role="button" aria-label="选择或拖入 PDF 文件">
+      <div class="upload-mark">PDF</div>
+      <h2>点击或拖拽上传 PDF 文件</h2>
+      <p>支持单个大 PDF、多个 PDF，也可选择整个文件夹</p>
+      <div class="upload-actions">
+        <button id="chooseFiles" class="text-button" type="button">选择 PDF</button>
+        <button id="chooseFolder" class="text-button" type="button">选择文件夹</button>
+      </div>
+      <input id="fileInput" type="file" accept="application/pdf,.pdf" multiple hidden>
+      <input id="folderInput" type="file" accept="application/pdf,.pdf" webkitdirectory multiple hidden>
+    </section>
+
+    <div id="fileSummary" class="file-summary" hidden></div>
+
+    <details class="settings-card" open>
+      <summary>
+        <span>识别与命名</span>
+        <small>只需选择模板页并填写字段名称</small>
+      </summary>
+      <div class="settings-body">
+        <div class="simple-settings">
+          <label class="field">
+            <span>分界模板</span>
+            <select id="templateMode">
+              <option value="first">第 1 页作为分界模板</option>
+              <option value="selected">指定页面作为分界模板</option>
+            </select>
+          </label>
+          <label id="templatePageField" class="field" hidden>
+            <span>模板页码</span>
+            <input id="templatePage" type="number" min="1" step="1" value="1">
+          </label>
+          <label class="field field-fields">
+            <span>提取字段名称，同时作为文件名顺序</span>
+            <textarea id="fieldNames" rows="3">标题、编号、项目名称、客户名称、日期</textarea>
+          </label>
+        </div>
+        <p class="settings-help">字段用逗号、顿号或换行分隔。系统自动提取“字段名：字段值”，无需正则表达式。</p>
+      </div>
+    </details>
+
+    <div class="primary-actions">
+      <button id="startButton" class="button button-primary" type="button" disabled>开始处理</button>
+      <a id="downloadButton" class="button button-download is-disabled" aria-disabled="true">下载结果</a>
+      <button id="stopButton" class="button button-stop" type="button" hidden>停止</button>
+      <button id="clearButton" class="button button-ghost" type="button">清空</button>
+    </div>
+
+    <section id="progressCard" class="progress-card" hidden aria-live="polite">
+      <div class="progress-header">
+        <strong id="progressLabel">准备处理</strong>
+        <span id="progressValue">0%</span>
+      </div>
+      <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+      <details>
+        <summary>处理日志</summary>
+        <pre id="logOutput"></pre>
+      </details>
+    </section>
+
+    <section class="results-card">
+      <header>
+        <h2>处理结果</h2>
+        <span id="resultCount" class="count-badge">0 项</span>
+      </header>
+      <div id="emptyState" class="empty-state">上传 PDF 并点击“开始处理”后，结果将显示在这里</div>
+      <div id="resultTableWrap" class="table-wrap" hidden>
+        <table>
+          <thead><tr><th>序号</th><th>文件名</th><th>原 PDF</th><th>页码</th><th>页数</th><th>识别标题</th><th>提取字段</th></tr></thead>
+          <tbody id="resultBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
+

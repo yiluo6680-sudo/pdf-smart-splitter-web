@@ -1,0 +1,82 @@
+:root {
+  --green-900: #16623f;
+  --green-800: #1e7650;
+  --green-700: #268c60;
+  --green-100: #e9f6ee;
+  --green-050: #f4fbf7;
+  --ink: #1e2923;
+  --muted: #66736c;
+  --line: #dce5df;
+  --surface: #fff;
+  --canvas: #f4f6f5;
+  --danger: #b44b44;
+  --shadow: 0 10px 28px rgba(27, 63, 44, .08);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; color: var(--ink); background: var(--canvas); }
+button, input, select, textarea { font: inherit; }
+.page-shell { width: min(1120px, calc(100% - 40px)); margin: 32px auto 64px; }
+.hero { padding: 25px 30px 28px; color: #fff; background: linear-gradient(125deg, var(--green-900), var(--green-700)); border-radius: 6px; box-shadow: var(--shadow); }
+.eyebrow { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; opacity: .76; }
+.hero h1 { margin: 0; font-size: clamp(25px, 3vw, 34px); line-height: 1.25; }
+.hero p:last-child { margin: 9px 0 0; opacity: .82; }
+.privacy-note { margin: 16px 7%; padding: 11px 15px; color: var(--green-900); background: var(--green-100); border: 1px solid #b9dcc7; border-radius: 8px; font-size: 14px; }
+.upload-zone { min-height: 190px; padding: 30px 20px; display: grid; place-items: center; align-content: center; text-align: center; background: #fff; border: 2px dashed #b7d3c2; border-radius: 12px; cursor: pointer; transition: .16s ease; }
+.upload-zone:hover, .upload-zone:focus-visible, .upload-zone.is-dragging { outline: none; border-color: var(--green-700); background: var(--green-050); transform: translateY(-1px); }
+.upload-mark { padding: 8px 10px; color: var(--green-800); background: var(--green-100); border-radius: 7px; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.upload-zone h2 { margin: 13px 0 6px; font-size: 17px; }
+.upload-zone > p { margin: 0; color: var(--muted); font-size: 14px; }
+.upload-actions { margin-top: 16px; display: flex; gap: 8px; }
+.text-button { padding: 7px 12px; color: var(--green-800); background: transparent; border: 1px solid #b9d7c5; border-radius: 7px; cursor: pointer; }
+.file-summary { margin-top: 10px; padding: 10px 14px; color: var(--muted); background: #fff; border: 1px solid var(--line); border-radius: 8px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.settings-card, .progress-card, .results-card { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.settings-card > summary { padding: 17px 20px; display: flex; align-items: baseline; gap: 10px; cursor: pointer; font-weight: 700; }
+.settings-card > summary small { color: var(--muted); font-weight: 400; }
+.settings-body { padding: 4px 20px 20px; border-top: 1px solid var(--line); }
+.simple-settings { padding-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.field { display: grid; gap: 6px; }
+.field-fields { grid-column: 1 / -1; }
+.field span { color: #4e5c55; font-size: 13px; font-weight: 650; }
+.field input, .field select, .field textarea { width: 100%; min-height: 40px; padding: 9px 11px; color: var(--ink); background: #fff; border: 1px solid #cfd9d2; border-radius: 7px; }
+.field textarea { resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid #b9dfc8; border-color: var(--green-700); }
+.settings-help { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+.primary-actions { display: flex; flex-wrap: wrap; gap: 9px; margin: 14px 0; }
+.button { min-height: 38px; padding: 0 17px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 8px; font-weight: 650; text-decoration: none; cursor: pointer; }
+.button:disabled, .button.is-disabled { opacity: .42; cursor: not-allowed; pointer-events: none; }
+.button-primary { color: #fff; background: var(--green-800); }
+.button-download { color: var(--green-900); background: var(--green-100); border-color: #b9dcc7; }
+.button-stop { color: #fff; background: var(--danger); }
+.button-ghost { color: #4e5c55; background: #fff; border-color: var(--line); }
+.progress-card { padding: 17px 20px; }
+.progress-header { display: flex; justify-content: space-between; gap: 16px; }
+.progress-track { height: 8px; margin: 12px 0; overflow: hidden; background: #e7ece9; border-radius: 99px; }
+.progress-bar { width: 0; height: 100%; background: var(--green-700); transition: width .2s ease; }
+.progress-card details summary { color: var(--muted); font-size: 13px; cursor: pointer; }
+.progress-card pre { max-height: 180px; overflow: auto; padding: 12px; color: #cce7d6; background: #17221c; border-radius: 8px; white-space: pre-wrap; font: 12px/1.55 ui-monospace, Consolas, monospace; }
+.results-card { overflow: hidden; }
+.results-card > header { padding: 17px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }
+.results-card h2 { margin: 0; font-size: 17px; }
+.count-badge { padding: 4px 10px; color: #fff; background: var(--green-700); border-radius: 99px; font-size: 12px; }
+.empty-state { min-height: 140px; display: grid; place-items: center; padding: 30px; color: #8b9790; text-align: center; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 12px 14px; border-bottom: 1px solid #edf1ee; text-align: left; vertical-align: top; }
+th { color: #536158; background: #f8faf9; white-space: nowrap; }
+td:nth-child(2), td:nth-child(3), td:nth-child(6), td:nth-child(7) { min-width: 180px; }
+.toast { position: fixed; right: 22px; bottom: 22px; max-width: min(390px, calc(100% - 44px)); padding: 12px 15px; color: #fff; background: #26372e; border-radius: 8px; box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); pointer-events: none; transition: .16s ease; }
+.toast.is-visible { opacity: 1; transform: translateY(0); }
+@media (max-width: 600px) {
+  .page-shell { width: calc(100% - 20px); margin-top: 12px; }
+  .hero { padding: 21px 20px; }
+  .privacy-note { margin-inline: 0; }
+  .upload-zone { min-height: 175px; }
+  .simple-settings { grid-template-columns: 1fr; }
+  .field-fields { grid-column: auto; }
+  .settings-card > summary { align-items: flex-start; flex-direction: column; }
+  .upload-actions, .primary-actions { width: 100%; }
+  .upload-actions button, .primary-actions .button { flex: 1; }
+}
+
