@@ -710,7 +710,6 @@ function sanitizeFieldValue(value, fieldName) {
     .replace(/联道/g, "隧道")
     .replace(/错杆/g, "锚杆")
     .replace(/(回填|C20)[雁奏丰]/g, "$1砼")
-    .replace(/\bI[Tl1]\s*型/g, "I型")
     .replace(/S-Va[lI1](?=[)）\-]|$)/g, "S-Va")
     .replace(/砼[A-Za-z]{1,3}$/g, "砼")
     .replace(/锚$/g, "锚杆")
@@ -720,6 +719,7 @@ function sanitizeFieldValue(value, fieldName) {
     .replace(/混凝[土士]/g, "混凝土")
     .replace(/\s*第\s*\d+\s*[页頁]\s*$/i, "")
     .replace(/\s*[Pp][Aa][Gg][Ee]\s*\d+\s*$/i, "");
+  result = normalizeRomanNumeralContext(result);
   if (isIdentifierField(fieldName)) {
     result = result
       .replace(/\s+/g, "")
@@ -728,6 +728,19 @@ function sanitizeFieldValue(value, fieldName) {
       .replace(/^[Oo](?=\d{3,})/g, "0");
   }
   return result.trim().slice(0, 150);
+}
+
+function normalizeRomanNumeralContext(value) {
+  // 仅在工程等级、型号等序号语境中转为大写，避免误改普通英文单词。
+  return String(value || "")
+    .replace(
+      /(^|[^A-Za-z])([ivxlcdm]+)(?=\s*(?:级|型|类|号|段|期|标|册|章|卷))/gi,
+      (_, prefix, numeral) => `${prefix}${numeral.toUpperCase()}`,
+    )
+    .replace(
+      /([（(])([ivxlcdm]+)(?=[)）])/gi,
+      (_, prefix, numeral) => `${prefix}${numeral.toUpperCase()}`,
+    );
 }
 
 function isIdentifierField(name) {
