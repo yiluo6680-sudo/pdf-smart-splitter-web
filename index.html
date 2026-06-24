@@ -10,7 +10,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 </head>
 <body>
   <main class="page-shell">
@@ -21,7 +20,7 @@
     </header>
 
     <section class="privacy-note">
-      文件只在当前浏览器处理，不上传服务器。扫描件首次识别会下载中文 OCR 模型。
+      PDF 分界扫描和拆分在浏览器完成；仅将需要识别的分界页上传至高精度 PP-OCRv6 服务。
     </section>
 
     <section id="dropZone" class="upload-zone" tabindex="0" role="button" aria-label="选择或拖入 PDF 文件">

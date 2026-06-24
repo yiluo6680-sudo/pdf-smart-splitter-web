@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const state = { files: [], running: false, cancelled: false, worker: null, downloadUrl: null, records: [] };
+const state = { files: [], running: false, cancelled: false, downloadUrl: null, records: [] };
 const DEFAULT_MATCH_THRESHOLD = 0.52;
 const SIGNATURE_SIZE = 48;
 let lastAutoNamingTemplate = "";
@@ -12,7 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bindEvents();
   updateTemplateMode();
   initializeNamingTemplate();
-  const required = ["pdfjsLib", "PDFLib", "JSZip", "XLSX", "Tesseract"];
+  const required = ["pdfjsLib", "PDFLib", "JSZip", "XLSX"];
   const missing = required.filter((name) => !window[name]);
   if (missing.length) showToast(`网页组件加载失败：${missing.join("、")}，请检查网络后刷新`);
 });
@@ -175,7 +175,6 @@ async function startProcessing() {
     if (state.cancelled) log("任务已停止");
     else { log(`处理失败：${error.message}`); showToast(error.message); }
   } finally {
-    if (state.worker) { await state.worker.terminate(); state.worker = null; }
     state.running = false;
     setRunningUI(false);
   }
@@ -391,20 +390,10 @@ async function recognizeBoundaryPage(page, filename, pageNumber, fieldFallback =
     log(`${filename} 第 ${pageNumber} 页：直接读取文字层`);
     return { text: nativeText, lines: [] };
   }
-  setProgress(null, `${filename} 第 ${pageNumber} 页：${fieldFallback ? "字段区域增强 " : ""}OCR 识别中`);
-  if (!state.worker) {
-    log("首次 OCR 正在下载中文识别模型，请稍候");
-    state.worker = await Tesseract.createWorker("chi_sim+eng", 1, {
-      logger: (message) => {
-        if (message.status === "recognizing text") {
-          $("progressLabel").textContent = `OCR 识别中 ${Math.round((message.progress || 0) * 100)}%`;
-        }
-      },
-    });
-  }
+  setProgress(null, `${filename} 第 ${pageNumber} 页：上传 PP-OCRv6 高精度识别`);
   // 快速分界扫描只使用 48×48 特征图；真正 OCR 只发生在分界页，
   // 因此这里提高渲染分辨率，优先保证编号和中文名称的识别准确率。
-  const viewport = page.getViewport({ scale: fieldFallback ? 3 : 2.6 });
+  const viewport = page.getViewport({ scale: fieldFallback ? 2.3 : 2.1 });
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewport.width);
   canvas.height = Math.round(viewport.height);
@@ -418,62 +407,30 @@ async function recognizeBoundaryPage(page, filename, pageNumber, fieldFallback =
     crop.height = cropBottom - cropTop;
     crop.getContext("2d", { alpha: false }).drawImage(canvas, 0, cropTop, canvas.width, crop.height, 0, 0, crop.width, crop.height);
     recognitionImage = crop;
-    await state.worker.setParameters({ tessedit_pageseg_mode: "11" });
-  } else {
-    await state.worker.setParameters({ tessedit_pageseg_mode: "11" });
   }
-  const result = await state.worker.recognize(recognitionImage, {}, { text: true, blocks: true });
-  const lines = flattenOcrLines(result.data.blocks || []);
-  const refined = fields.length ? await refineOcrFields(recognitionImage, lines, fields) : {};
-  return { text: result.data.text || "", lines, refined };
+
+  const blob = await canvasToBlob(recognitionImage, "image/jpeg", 0.92);
+  const form = new FormData();
+  form.append("image", blob, `${stripExtension(filename)}-${pageNumber}.jpg`);
+  let response;
+  try {
+    response = await fetch("./api/ocr", { method: "POST", body: form });
+  } catch (error) {
+    throw new Error("高精度 OCR 服务无法连接，已停止处理，未生成错误文件");
+  }
+  let result = {};
+  try { result = await response.json(); } catch {}
+  if (!response.ok) {
+    throw new Error(result.detail || `高精度 OCR 服务异常（${response.status}）`);
+  }
+  log(`${filename} 第 ${pageNumber} 页：${result.engine} 平均置信度 ${Number(result.averageConfidence || 0).toFixed(1)}%`);
+  return { text: result.text || "", lines: result.lines || [], refined: {}, engine: result.engine };
 }
 
-function flattenOcrLines(blocks) {
-  const lines = [];
-  for (const block of blocks || []) {
-    for (const paragraph of block.paragraphs || []) {
-      for (const line of paragraph.lines || []) {
-        lines.push({ text: normalizeOcrLine(line.text), bbox: line.bbox, confidence: line.confidence || 0 });
-      }
-    }
-  }
-  return lines.filter((line) => line.text && line.bbox);
-}
-
-async function refineOcrFields(canvas, lines, fields) {
-  const refined = {};
-  for (const field of fields) {
-    if (field === "标题") continue;
-    const labels = lines
-      .map((line) => ({ line, match: fieldLabelMatch(line.text, field) }))
-      .filter((item) => item.match.score >= 0.72)
-      .sort((left, right) => right.match.score - left.match.score);
-    const label = labels[0]?.line;
-    if (!label) continue;
-    const box = label.bbox;
-    const height = Math.max(1, box.y1 - box.y0);
-    const cropLeft = Math.max(0, Math.round(box.x1 + (height * 0.15)));
-    let cropRight = Math.round(canvas.width * 0.96);
-    for (const otherField of fields) {
-      if (otherField === field) continue;
-      const otherLabel = lines.find((line) => fieldLabelMatch(line.text, otherField).score >= 0.72
-        && line.bbox.x0 > cropLeft
-        && Math.abs(((line.bbox.y0 + line.bbox.y1) / 2) - ((box.y0 + box.y1) / 2)) <= height * 1.4);
-      if (otherLabel) cropRight = Math.min(cropRight, Math.round(otherLabel.bbox.x0 - (height * 0.35)));
-    }
-    const cropTop = Math.max(0, Math.round(box.y0 - (height * 0.45)));
-    const cropBottom = Math.min(canvas.height, Math.round(box.y1 + (height * 2.2)));
-    if (cropRight - cropLeft < height * 3 || cropBottom - cropTop < height) continue;
-    const crop = document.createElement("canvas");
-    crop.width = cropRight - cropLeft;
-    crop.height = cropBottom - cropTop;
-    crop.getContext("2d", { alpha: false }).drawImage(canvas, cropLeft, cropTop, crop.width, crop.height, 0, 0, crop.width, crop.height);
-    await state.worker.setParameters({ tessedit_pageseg_mode: "6" });
-    const result = await state.worker.recognize(crop);
-    const value = selectRefinedFieldValue(result.data.text || "", field, fields);
-    if (value) refined[field] = value;
-  }
-  return refined;
+function canvasToBlob(canvas, type, quality) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("无法生成 OCR 页面图片")), type, quality);
+  });
 }
 
 async function extractNativeText(page) {
@@ -776,7 +733,7 @@ function fieldValueScore(value, fieldName) {
 }
 
 function shouldRecognizeFallback(extracted, fields) {
-  return fields.some((field) => isIdentifierField(field) || fieldValueScore(extracted[field], field) < 0.55);
+  return fields.some((field) => fieldValueScore(extracted[field], field) < (isIdentifierField(field) ? 0.72 : 0.55));
 }
 
 function mergeFieldValues(primary, fallback, fields) {
@@ -827,7 +784,6 @@ function renderResults() {
 
 async function stopProcessing() {
   state.cancelled = true;
-  if (state.worker) { await state.worker.terminate(); state.worker = null; }
   $("progressLabel").textContent = "正在停止";
 }
 
