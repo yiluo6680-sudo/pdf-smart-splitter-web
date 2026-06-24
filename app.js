@@ -647,7 +647,12 @@ function normalizeOcrLine(value) {
 }
 
 function canonicalLabel(value) {
-  const replacements = { "項": "项", "編": "编", "號": "号", "稱": "称", "現": "项", "现": "项" };
+  const replacements = {
+    "項": "项", "編": "编", "號": "号", "稱": "称", "現": "现",
+    "頁": "页", "圖": "图", "單": "单", "節": "节", "業": "业",
+    "處": "处", "類": "类", "結": "结", "測": "测", "設": "设",
+    "說": "说", "層": "层",
+  };
   return normalizeOcrLine(value)
     .split("")
     .map((char) => replacements[char] || char)
@@ -708,9 +713,21 @@ function sanitizeFieldValue(value, fieldName) {
     .replace(/\bI[Tl1]\s*型/g, "I型")
     .replace(/S-Va[lI1](?=[)）\-]|$)/g, "S-Va")
     .replace(/砼[A-Za-z]{1,3}$/g, "砼")
-    .replace(/锚$/g, "锚杆");
-  if (isIdentifierField(fieldName)) result = result.replace(/\s+/g, "");
-  return result.slice(0, 150);
+    .replace(/锚$/g, "锚杆")
+    .replace(/暗杆|漏杆|扭杆/g, "锚杆")
+    .replace(/涌道|疏道/g, "隧道")
+    .replace(/(回填|C\d{2})[雁奏丰幸]/g, "$1砼")
+    .replace(/混凝[土士]/g, "混凝土")
+    .replace(/\s*第\s*\d+\s*[页頁]\s*$/i, "")
+    .replace(/\s*[Pp][Aa][Gg][Ee]\s*\d+\s*$/i, "");
+  if (isIdentifierField(fieldName)) {
+    result = result
+      .replace(/\s+/g, "")
+      .replace(/(\d)[Oo](?=\d)/g, (_, digit) => `${digit}0`)
+      .replace(/(\d)[lI](?=\d)/g, (_, digit) => `${digit}1`)
+      .replace(/^[Oo](?=\d{3,})/g, "0");
+  }
+  return result.trim().slice(0, 150);
 }
 
 function isIdentifierField(name) {
