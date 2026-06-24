@@ -1,7 +1,8 @@
 const $ = (id) => document.getElementById(id);
 const state = { files: [], running: false, cancelled: false, worker: null, downloadUrl: null, records: [] };
-const MATCH_THRESHOLD = 0.56;
+const DEFAULT_MATCH_THRESHOLD = 0.52;
 const SIGNATURE_SIZE = 48;
+let lastAutoNamingTemplate = "";
 
 if (window.pdfjsLib) {
   window.pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
@@ -10,6 +11,7 @@ if (window.pdfjsLib) {
 document.addEventListener("DOMContentLoaded", () => {
   bindEvents();
   updateTemplateMode();
+  initializeNamingTemplate();
   const required = ["pdfjsLib", "PDFLib", "JSZip", "XLSX", "Tesseract"];
   const missing = required.filter((name) => !window[name]);
   if (missing.length) showToast(`网页组件加载失败：${missing.join("、")}，请检查网络后刷新`);
@@ -34,6 +36,12 @@ function bindEvents() {
   $("dropZone").ondrop = (event) => addFiles(event.dataTransfer.files);
   $("processMode").onchange = updateProcessingMode;
   $("templateMode").onchange = updateTemplateMode;
+  $("fieldNames").oninput = () => syncNamingTemplate();
+  $("namingSeparator").onchange = applyNamingSeparator;
+  $("namingTemplate").oninput = () => {
+    $("namingTemplate").dataset.auto = "false";
+    $("namingSeparator").value = "custom";
+  };
   $("startButton").onclick = startProcessing;
   $("stopButton").onclick = stopProcessing;
   $("clearButton").onclick = clearAll;
@@ -81,6 +89,40 @@ function parseFieldNames() {
   return Array.from(new Set($("fieldNames").value.split(/[、,，;；\n]+/).map((item) => item.trim()).filter(Boolean)));
 }
 
+function selectedNamingSeparator() {
+  return { underscore: "_", hyphen: "-", space: " ", none: "" }[$("namingSeparator").value] ?? "_";
+}
+
+function buildDefaultNamingTemplate(fields, separator = selectedNamingSeparator()) {
+  return fields.map((field) => `{${field}}`).join(separator);
+}
+
+function initializeNamingTemplate() {
+  const generated = buildDefaultNamingTemplate(parseFieldNames());
+  const input = $("namingTemplate");
+  if (!input.value.trim() || input.value.trim() === generated) input.value = generated;
+  input.dataset.auto = "true";
+  lastAutoNamingTemplate = generated;
+}
+
+function syncNamingTemplate() {
+  const input = $("namingTemplate");
+  const generated = buildDefaultNamingTemplate(parseFieldNames());
+  if (input.dataset.auto === "true" || !input.value.trim() || input.value.trim() === lastAutoNamingTemplate) {
+    input.value = generated;
+    input.dataset.auto = "true";
+  }
+  lastAutoNamingTemplate = generated;
+}
+
+function applyNamingSeparator() {
+  if ($("namingSeparator").value === "custom") return;
+  const generated = buildDefaultNamingTemplate(parseFieldNames());
+  $("namingTemplate").value = generated;
+  $("namingTemplate").dataset.auto = "true";
+  lastAutoNamingTemplate = generated;
+}
+
 async function startProcessing() {
   if (state.running || !state.files.length) return;
   const fields = parseFieldNames();
@@ -88,6 +130,13 @@ async function startProcessing() {
   const processMode = resolveProcessMode();
   const templatePage = $("templateMode").value === "selected" ? Number($("templatePage").value) : 1;
   if (processMode === "split" && (!Number.isInteger(templatePage) || templatePage < 1)) return showToast("模板页码必须是大于 0 的整数");
+  const expectedCountRaw = $("expectedCount").value.trim();
+  const expectedCount = processMode === "split" && expectedCountRaw ? Number(expectedCountRaw) : null;
+  if (expectedCount !== null && (!Number.isInteger(expectedCount) || expectedCount < 1)) return showToast("预期拆分份数必须是大于 0 的整数");
+  const namingTemplate = $("namingTemplate").value.trim() || buildDefaultNamingTemplate(fields);
+  const placeholders = Array.from(namingTemplate.matchAll(/\{([^{}]+)\}/g), (match) => match[1].trim());
+  const unknownFields = Array.from(new Set(placeholders.filter((field) => !fields.includes(field))));
+  if (unknownFields.length) return showToast(`文件名规则包含未配置字段：${unknownFields.join("、")}`);
 
   state.running = true;
   state.cancelled = false;
@@ -104,7 +153,7 @@ async function startProcessing() {
       checkCancelled();
       fileIndex += 1;
       log(`[${fileIndex}/${state.files.length}] ${processMode === "rename" ? "识别并重命名" : "分析并拆分"} ${file.name}`);
-      await processOnePdf(file, templatePage, fields, zip, usedNames, fileIndex, processMode);
+      await processOnePdf(file, templatePage, fields, zip, usedNames, fileIndex, processMode, namingTemplate, expectedCount);
     }
     if (!state.records.length) throw new Error("没有生成可下载的 PDF");
     addExcelCatalog(zip, state.records, fields);
@@ -132,7 +181,7 @@ async function startProcessing() {
   }
 }
 
-async function processOnePdf(file, templatePage, fields, zip, usedNames, fileIndex, processMode) {
+async function processOnePdf(file, templatePage, fields, zip, usedNames, fileIndex, processMode, namingTemplate, expectedCount) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const pdfjs = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
   if (processMode === "split" && templatePage > pdfjs.numPages) throw new Error(`${file.name} 只有 ${pdfjs.numPages} 页，模板页 ${templatePage} 不存在`);
@@ -141,22 +190,29 @@ async function processOnePdf(file, templatePage, fields, zip, usedNames, fileInd
 
   if (processMode === "split") {
     const templateSignature = await pageSignature(await pdfjs.getPage(templatePage));
-    const starts = [1];
+    const pageScores = [];
     for (let pageNumber = 1; pageNumber <= pdfjs.numPages; pageNumber += 1) {
       checkCancelled();
       const page = await pdfjs.getPage(pageNumber);
       const signature = await pageSignature(page);
       const similarity = signatureSimilarity(templateSignature, signature);
-      if (pageNumber !== 1 && similarity >= MATCH_THRESHOLD) {
-        starts.push(pageNumber);
-        log(`${file.name} 第 ${pageNumber} 页：模板相似度 ${similarity.toFixed(2)}，判定为分界页`);
-      }
+      pageScores.push({ page: pageNumber, score: similarity });
       const base = ((fileIndex - 1) / state.files.length) * 55;
       const share = (pageNumber / pdfjs.numPages) * (55 / state.files.length);
       setProgress(base + share, `${file.name}：快速扫描 ${pageNumber}/${pdfjs.numPages} 页`);
     }
+    const thresholdInfo = chooseAdaptiveThreshold(pageScores, templatePage, expectedCount);
+    const starts = [1, ...pageScores.filter((item) => item.page !== 1 && item.score >= thresholdInfo.threshold).map((item) => item.page)];
     uniqueStarts = Array.from(new Set(starts)).sort((a, b) => a - b);
+    log(`${file.name}：自适应分界阈值 ${thresholdInfo.threshold.toFixed(2)}，封面组与普通页间隔 ${thresholdInfo.gap.toFixed(2)}`);
+    for (const start of uniqueStarts.filter((page) => page !== 1)) {
+      const score = pageScores.find((item) => item.page === start)?.score || 0;
+      log(`${file.name} 第 ${start} 页：模板相似度 ${score.toFixed(2)}，判定为分界页`);
+    }
     log(`${file.name}：找到分界页 ${uniqueStarts.join("、")}`);
+    if (expectedCount !== null && uniqueStarts.length !== expectedCount) {
+      throw new Error(`${file.name} 检测到 ${uniqueStarts.length} 份，与预期 ${expectedCount} 份不一致，已停止输出。分界页：${uniqueStarts.join("、")}`);
+    }
   } else {
     log(`${file.name}：独立文件模式，仅识别第一页，不拆分原 PDF`);
     const base = ((fileIndex - 1) / state.files.length) * 55;
@@ -177,7 +233,7 @@ async function processOnePdf(file, templatePage, fields, zip, usedNames, fileInd
       const fallbackText = await recognizeBoundaryPage(await pdfjs.getPage(fallbackPageNumber), file.name, fallbackPageNumber, true, fields);
       extracted = mergeFieldValues(extracted, extractFields(fallbackText, fields, firstUsefulLine(fallbackText)), fields);
     }
-    const rawStem = fields.map((name) => extracted[name]).filter(Boolean).join("_") || `${stripExtension(file.name)}_${start}-${end}`;
+    const rawStem = renderNamingTemplate(namingTemplate, extracted, fields) || `${stripExtension(file.name)}_${start}-${end}`;
     const filename = uniqueFilename(cleanFilename(rawStem), usedNames);
     const outPdf = await PDFLib.PDFDocument.create();
     const copied = await outPdf.copyPages(sourcePdf, Array.from({ length: end - start + 1 }, (_, offset) => start - 1 + offset));
@@ -242,6 +298,61 @@ function signatureSimilarity(left, right) {
   return (dice * 0.65) + (projection * 0.20) + (density * 0.15);
 }
 
+function chooseAdaptiveThreshold(pageScores, templatePage, expectedCount = null) {
+  const sorted = pageScores
+    .filter((item) => item.page !== 1 && item.page !== templatePage && item.score >= 0.25 && item.score < 0.96)
+    .map((item) => item.score)
+    .sort((left, right) => right - left);
+  const forcedStarts = templatePage === 1 ? 1 : 2;
+  const remainingExpected = expectedCount === null ? null : expectedCount - forcedStarts;
+  if (remainingExpected !== null && remainingExpected >= 0 && remainingExpected < sorted.length) {
+    if (remainingExpected === 0) return { threshold: 0.97, gap: 1, source: "expected-count" };
+    const upper = sorted[remainingExpected - 1];
+    const lower = sorted[remainingExpected];
+    return { threshold: (upper + lower) / 2, gap: upper - lower, source: "expected-count" };
+  }
+
+  let bestGap = 0;
+  let threshold = DEFAULT_MATCH_THRESHOLD;
+  let lowestReliableThreshold = null;
+  let lowestReliableGap = 0;
+  for (let index = 0; index < sorted.length - 1; index += 1) {
+    const upper = sorted[index];
+    const lower = sorted[index + 1];
+    const gap = upper - lower;
+    // 同类封面可能因扫描深浅形成多个分组。优先取最下层仍有明显断层的分界，
+    // 避免只识别颜色较深的一组封面。
+    const candidateThreshold = (upper + lower) / 2;
+    if (gap >= 0.045 && upper >= 0.36 && lower <= 0.42 && candidateThreshold >= 0.32) {
+      if (lowestReliableThreshold === null || candidateThreshold < lowestReliableThreshold) {
+        lowestReliableThreshold = candidateThreshold;
+        lowestReliableGap = gap;
+      }
+    }
+    if (upper < 0.43 || lower > 0.60) continue;
+    if (gap > bestGap) {
+      bestGap = gap;
+      threshold = candidateThreshold;
+    }
+  }
+  if (lowestReliableThreshold !== null) {
+    return { threshold: lowestReliableThreshold, gap: lowestReliableGap, source: "lowest-cover-cluster" };
+  }
+  if (bestGap < 0.07) return { threshold: DEFAULT_MATCH_THRESHOLD, gap: bestGap };
+  return { threshold: Math.max(0.40, Math.min(0.58, threshold)), gap: bestGap };
+}
+
+function renderNamingTemplate(template, extracted, fields) {
+  const values = Object.fromEntries(fields.map((field) => [field, extracted[field] || ""]));
+  const rendered = String(template || "").replace(/\{([^{}]+)\}/g, (_, field) => values[field.trim()] || "");
+  return rendered
+    .replace(/_{2,}/g, "_")
+    .replace(/-{2,}/g, "-")
+    .replace(/[\s_-]+$/g, "")
+    .replace(/^[\s_-]+/g, "")
+    .trim();
+}
+
 function shiftedDice(left, right, shiftX, shiftY) {
   let intersection = 0;
   let leftInk = 0;
@@ -291,7 +402,9 @@ async function recognizeBoundaryPage(page, filename, pageNumber, fieldFallback =
       },
     });
   }
-  const viewport = page.getViewport({ scale: fieldFallback ? 2.6 : 2 });
+  // 快速分界扫描只使用 48×48 特征图；真正 OCR 只发生在分界页，
+  // 因此这里提高渲染分辨率，优先保证编号和中文名称的识别准确率。
+  const viewport = page.getViewport({ scale: fieldFallback ? 3 : 2.6 });
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(viewport.width);
   canvas.height = Math.round(viewport.height);

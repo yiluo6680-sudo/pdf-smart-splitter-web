@@ -65,13 +65,31 @@
             <span>模板页码</span>
             <input id="templatePage" type="number" min="1" step="1" value="1">
           </label>
+          <label class="field">
+            <span>预期拆分份数（可选）</span>
+            <input id="expectedCount" type="number" min="1" step="1" placeholder="例如：23">
+          </label>
           </div>
           <label class="field field-fields">
             <span>提取字段名称，同时作为文件名顺序</span>
             <textarea id="fieldNames" rows="3">标题、编号、项目名称、客户名称、日期</textarea>
           </label>
+          <label class="field">
+            <span>多字段连接符</span>
+            <select id="namingSeparator">
+              <option value="underscore" selected>_ 下划线</option>
+              <option value="hyphen">- 短横线</option>
+              <option value="space">空格</option>
+              <option value="none">无符号</option>
+              <option value="custom">自定义命名规则</option>
+            </select>
+          </label>
+          <label class="field field-fields">
+            <span>文件名规则</span>
+            <input id="namingTemplate" type="text" value="{标题}_{编号}_{项目名称}_{客户名称}_{日期}">
+          </label>
         </div>
-        <p class="settings-help">字段用逗号、顿号或换行分隔。系统按标签附近内容提取；编号缺失或受印章干扰时，只补充识别下一页。</p>
+        <p class="settings-help">字段写成 {字段名}，中间可使用 _、-、空格或不加符号，例如：{分项工程编号}-{分项工程名称}。填写预期份数后，数量不符会停止输出。</p>
       </div>
     </details>
 
